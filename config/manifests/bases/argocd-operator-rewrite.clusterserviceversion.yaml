@@ -1,0 +1,62 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: '[]'
+    capabilities: Basic Install
+  name: argocd-operator-rewrite.v0.0.0
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - description: ArgoCD is the Schema for the argocds API
+      displayName: Argo CD
+      kind: ArgoCD
+      name: argocds.argoproj.io
+      specDescriptors:
+      - description: KustomizeVersions is a listing of configured versions of Kustomize
+          to be made available within ArgoCD.
+        displayName: Kustomize Build Options'
+        path: kustomizeVersions
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+        - urn:alm:descriptor:com.tectonic.ui:advanced
+      - description: OIDCConfig is the OIDC configuration as an alternative to dex.
+        displayName: OIDC Config'
+        path: oidcConfig
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
+        - urn:alm:descriptor:com.tectonic.ui:advanced
+      version: v1alpha1
+  description: argocd, operator
+  displayName: argocd
+  icon:
+  - base64data: ""
+    mediatype: ""
+  install:
+    spec:
+      deployments: null
+    strategy: ""
+  installModes:
+  - supported: false
+    type: OwnNamespace
+  - supported: false
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: true
+    type: AllNamespaces
+  keywords:
+  - argocd
+  - operator
+  links:
+  - name: Argocd Operator Rewrite
+    url: https://argocd-operator-rewrite.domain
+  maintainers:
+  - email: jrao@redhat.com
+    name: Jaideep
+  maturity: alpha
+  provider:
+    name: Jaideep Rao
+  version: 0.0.0
