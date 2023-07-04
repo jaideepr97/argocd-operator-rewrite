@@ -123,12 +123,16 @@ github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okW
 
 // DefaultLabels returns the default set of labels for controllers.
 func DefaultLabels(name, component string) map[string]string {
-	return map[string]string{
+	LabelsMap := map[string]string{
 		ArgoCDKeyName:      name,
 		ArgoCDKeyPartOf:    ArgoCDAppName,
 		ArgoCDKeyManagedBy: name,
-		ArgoCDKeyComponent: component,
 	}
+
+	if component != "" {
+		LabelsMap[ArgoCDKeyComponent] = component
+	}
+	return LabelsMap
 }
 
 // DefaultAnnotations returns the default set of annotations for child resources of ArgoCD

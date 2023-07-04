@@ -1,6 +1,9 @@
 package argoutil
 
-import "strings"
+import (
+	"sort"
+	"strings"
+)
 
 func SplitList(s string) []string {
 	elems := strings.Split(s, ",")
@@ -19,4 +22,18 @@ func RemoveString(slice []string, s string) []string {
 		result = append(result, item)
 	}
 	return result
+}
+
+func Equal(a, b []string) bool {
+	sort.Strings(a)
+	sort.Strings(b)
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

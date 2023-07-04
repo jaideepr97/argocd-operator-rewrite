@@ -12,6 +12,7 @@ import (
 )
 
 type ServiceaccountRequest struct {
+	Name         string
 	InstanceName string
 	Namespace    string
 	Component    string
@@ -19,17 +20,21 @@ type ServiceaccountRequest struct {
 }
 
 // newServiceAccount returns a new ServiceAccount instance.
-func newServiceAccount(instanceName, namespace, component string) *corev1.ServiceAccount {
+func newServiceAccount(name, instanceName, namespace, component string) *corev1.ServiceAccount {
+	saName := argoutil.GenerateResourceName(instanceName, component)
+	if name != "" {
+		saName = name
+	}
 	return &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      argoutil.GenerateResourceName(instanceName, component),
+			Name:      saName,
 			Namespace: namespace,
 			Labels:    argoutil.LabelsForCluster(instanceName, component),
 		},
 	}
 }
 func RequestServiceaccount(request ServiceaccountRequest) *corev1.ServiceAccount {
-	return newServiceAccount(request.InstanceName, request.Namespace, request.Component)
+	return newServiceAccount(request.Name, request.InstanceName, request.Namespace, request.Component)
 }
 
 func CreateServiceAccount(sa *corev1.ServiceAccount, client ctrlClient.Client) error {

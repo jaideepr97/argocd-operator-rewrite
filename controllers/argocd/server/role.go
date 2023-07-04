@@ -5,6 +5,7 @@ import (
 
 	"github.com/jaideepr97/argocd-operator-rewrite/common"
 	"github.com/jaideepr97/argocd-operator-rewrite/pkg/argoutil"
+	"github.com/jaideepr97/argocd-operator-rewrite/pkg/cluster"
 	"github.com/jaideepr97/argocd-operator-rewrite/pkg/mutation"
 	"github.com/jaideepr97/argocd-operator-rewrite/pkg/permissions"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -39,6 +40,17 @@ func (sr *ServerReconciler) reconcileManagedRoles(rr *permissions.RoleRequest) e
 	var reconciliationError error = nil
 
 	for namespace := range sr.ManagedNamespaces {
+		// Skip namespace if can't be retrieved or in terminating state
+		ns, err := cluster.GetNamespace(namespace, *sr.Client)
+		if err != nil {
+			sr.Logger.Error(err, "reconcileManagedRoles: unable to retrieve namesapce", "name", namespace)
+			continue
+		}
+		if ns.DeletionTimestamp != nil {
+			sr.Logger.V(1).Info("reconcileManagedRoles: skipping namespace in terminating state", "name", namespace)
+			continue
+		}
+
 		rules := policyRuleForManagedNamespace()
 		// control-plane rules for namespace scoped instance
 		if namespace == sr.Instance.Namespace {
@@ -132,9 +144,21 @@ func (sr *ServerReconciler) reconcileManagedRoles(rr *permissions.RoleRequest) e
 func (sr *ServerReconciler) reconcileSourceRoles(rr *permissions.RoleRequest) error {
 	var reconciliationError error = nil
 
-	for ns, _ := range sr.SourceNamespaces {
+	for namespace, _ := range sr.SourceNamespaces {
+		// Skip namespace if can't be retrieved or in terminating state
+		ns, err := cluster.GetNamespace(namespace, *sr.Client)
+		if err != nil {
+			sr.Logger.Error(err, "reconcileSourceRoles: unable to retrieve namesapce", "name", namespace)
+			continue
+		}
+		if ns.DeletionTimestamp != nil {
+			sr.Logger.V(1).Info("reconcileSourceRoles: skipping namespace in terminating state", "name", namespace)
+			continue
+		}
+
 		rr.Rules = policyRuleForSourceNamespace()
-		rr.Namespace = ns
+		rr.Namespace = namespace
+		rr.Name = getSourceNamespaceRBACName(sr.Instance.Name, sr.Instance.Namespace)
 
 		desiredRole, err := permissions.RequestRole(*rr)
 		if err != nil {
@@ -144,7 +168,6 @@ func (sr *ServerReconciler) reconcileSourceRoles(rr *permissions.RoleRequest) er
 			continue
 		}
 
-		desiredRole.Name = getSourceNamespaceRBACName(sr.Instance.Name, sr.Instance.Namespace)
 		// add special label for source namespace role
 		if len(desiredRole.Labels) == 0 {
 			desiredRole.Labels = make(map[string]string)

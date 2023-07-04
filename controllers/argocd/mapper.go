@@ -10,6 +10,7 @@ import (
 	"github.com/jaideepr97/argocd-operator-rewrite/controllers/argocd/redis"
 	"github.com/jaideepr97/argocd-operator-rewrite/controllers/argocd/reposerver"
 	"github.com/jaideepr97/argocd-operator-rewrite/controllers/argocd/server"
+	"github.com/jaideepr97/argocd-operator-rewrite/pkg/cluster"
 	"github.com/jaideepr97/argocd-operator-rewrite/pkg/permissions"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -152,10 +153,10 @@ func (r *ArgoCDReconciler) clusterSecretMapper(ctx context.Context, o client.Obj
 func (r *ArgoCDReconciler) namespaceMapper(ctx context.Context, obj client.Object) []reconcile.Request {
 	var result = []reconcile.Request{}
 
-	managedNamespace := obj.GetName()
-	if managedNsOptions, ok := ScheduledForRBACDeletion[managedNamespace]; ok {
+	managedNamespace := obj.(*corev1.Namespace)
+	if managedNsOptions, ok := ScheduledForRBACDeletion[managedNamespace.Name]; ok {
 
-		err := r.deleteRBACFromPreviouslyManagedNamespace(managedNamespace, managedNsOptions.ResourceDeletionLabelValues)
+		err := r.deleteRBACFromPreviouslyManagedNamespace(managedNamespace.Name, managedNsOptions.ResourceDeletionLabelValues)
 		if err != nil {
 			r.Logger.Error(err, "namespaceMapper: failed to delete resources from previously managed namespace: %s", managedNamespace)
 		}
@@ -163,13 +164,30 @@ func (r *ArgoCDReconciler) namespaceMapper(ctx context.Context, obj client.Objec
 		if managedNsOptions.ManagingNamespace != "" {
 			// This means namespace was managed for resources, and cluster secret in managing namespace needs to be updated
 			// Delegate handling of cluster secret update to the secret controller
-			err = r.SecretController.DeleteManagedNamespaceFromClusterSecret(managedNsOptions.ManagingNamespace, managedNamespace)
+			err = r.SecretController.DeleteManagedNamespaceFromClusterSecret(managedNsOptions.ManagingNamespace, managedNamespace.Name)
 			if err != nil {
 				r.Logger.Error(err, "namespaceMapper: failed to delete previously managed namespace %s from cluster secret in namespace %s", managedNamespace, managedNsOptions.ManagingNamespace)
 			}
 		}
 
-		delete(ScheduledForRBACDeletion, managedNamespace)
+		delete(ScheduledForRBACDeletion, managedNamespace.Name)
+	}
+
+	// if namespace is terminating, remove any managed by labels and don't trigger reconciliation
+	if managedNamespace.DeletionTimestamp != nil {
+		if _, ok := obj.GetLabels()[common.ArgoCDResourcesManagedByLabel]; ok {
+			delete(obj.GetLabels(), common.ArgoCDResourcesManagedByLabel)
+		}
+
+		if _, ok := obj.GetLabels()[common.ArgoCDAppsManagedByLabel]; ok {
+			delete(obj.GetLabels(), common.ArgoCDAppsManagedByLabel)
+		}
+
+		if err := cluster.UpdateNamespace(managedNamespace, r.Client); err != nil {
+			r.Logger.V(1).Info("namespaceMapper: failed to unlabel terminating namesapce", "name", managedNamespace.Name)
+		}
+
+		return result
 	}
 
 	if ns, ok := obj.GetLabels()[common.ArgoCDResourcesManagedByLabel]; ok {
@@ -253,7 +271,7 @@ func (r *ArgoCDReconciler) deleteRBACFromPreviouslyManagedNamespace(namespace st
 
 	for _, rb := range existingRoleBindings.Items {
 		// delegate deletion to appController roleBindings to appController
-		if strings.HasSuffix(rb.Name, appcontroller.ArgoCDApplicationControllerComponent) {
+		if val, ok := rb.Labels[common.ArgoCDKeyComponent]; ok && val == appcontroller.ArgoCDApplicationControllerComponent {
 			if err := r.AppController.DeleteRoleBinding(rb.Name, rb.Namespace); err != nil {
 				r.Logger.Error(err, "deleteRBACFromPreviouslyManagedCluster: failed to delete app controller roleBinding", "name", rb.Name, "namespace", namespace)
 			}
@@ -261,7 +279,7 @@ func (r *ArgoCDReconciler) deleteRBACFromPreviouslyManagedNamespace(namespace st
 		}
 
 		// delegate deletion to server roleBindings to server
-		if strings.HasSuffix(rb.Name, server.ArgoCDServerComponent) {
+		if val, ok := rb.Labels[common.ArgoCDKeyComponent]; ok && val == server.ArgoCDServerComponent {
 			if err := r.ServerController.DeleteRoleBinding(rb.Name, rb.Namespace); err != nil {
 				r.Logger.Error(err, "deleteRBACFromPreviouslyManagedCluster: failed to delete server roleBinding", "name", rb.Name, "namespace", namespace)
 			}
@@ -269,16 +287,15 @@ func (r *ArgoCDReconciler) deleteRBACFromPreviouslyManagedNamespace(namespace st
 	}
 
 	for _, role := range existingRoles.Items {
-		// delegate deletion to appController roles to appController
-		if strings.HasSuffix(role.Name, appcontroller.ArgoCDApplicationControllerComponent) {
+		// delegate deletion of appController role to appController
+		if val, ok := role.Labels[common.ArgoCDKeyComponent]; ok && val == appcontroller.ArgoCDApplicationControllerComponent {
 			if err := r.AppController.DeleteRole(role.Name, role.Namespace); err != nil {
 				r.Logger.Error(err, "deleteRBACFromPreviouslyManagedCluster: failed to delete app controller role", "name", role.Name, "namespace", namespace)
 			}
-
 		}
 
-		// delegate deletion to server roles to server
-		if strings.HasSuffix(role.Name, server.ArgoCDServerComponent) {
+		// delegate deletion of server role to server
+		if val, ok := role.Labels[common.ArgoCDKeyComponent]; ok && val == server.ArgoCDServerComponent {
 			if err := r.ServerController.DeleteRole(role.Name, role.Namespace); err != nil {
 				r.Logger.Error(err, "deleteRBACFromPreviouslyManagedCluster: failed to delete server role", "name", role.Name, "namespace", namespace)
 			}

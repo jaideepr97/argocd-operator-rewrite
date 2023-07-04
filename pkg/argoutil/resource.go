@@ -8,6 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 )
 
+// GenerateResourceName generates names for namespace scoped scoped resources
 func GenerateResourceName(instanceName, component string) string {
 	return fmt.Sprintf("%s-%s", instanceName, component)
 }
@@ -32,8 +33,8 @@ func AnnotationsForCluster(instanceName, instanceNamespace string, instanceAnnot
 }
 
 // nameWithSuffix will return a name with the given suffix appended to it
-func NameWithSuffix(suffix, instanceName string) string {
-	return fmt.Sprintf("%s-%s", instanceName, suffix)
+func NameWithSuffix(name, suffix string) string {
+	return fmt.Sprintf("%s-%s", name, suffix)
 }
 
 // ConvertLabelSelector takes a metav1.LabelSelector as input and returns a labels.Selector

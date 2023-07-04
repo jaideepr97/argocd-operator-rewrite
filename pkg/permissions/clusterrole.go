@@ -15,6 +15,7 @@ import (
 )
 
 type ClusterRoleRequest struct {
+	Name                string
 	InstanceName        string
 	InstanceNamespace   string
 	InstanceAnnotations map[string]string
@@ -27,10 +28,15 @@ type ClusterRoleRequest struct {
 }
 
 // newClusterRole returns a new clusterRole instance.
-func newClusterRole(instanceName, instanceNamespace, component string, instanceAnnotations map[string]string, rules []rbacv1.PolicyRule) *rbacv1.ClusterRole {
+func newClusterRole(name, instanceName, instanceNamespace, component string, instanceAnnotations map[string]string, rules []rbacv1.PolicyRule) *rbacv1.ClusterRole {
+	crName := argoutil.GenerateUniqueResourceName(instanceName, instanceNamespace, component)
+	if name != "" {
+		crName = name
+	}
+
 	return &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        argoutil.GenerateUniqueResourceName(instanceName, instanceNamespace, component),
+			Name:        crName,
 			Labels:      argoutil.LabelsForCluster(instanceName, component),
 			Annotations: argoutil.AnnotationsForCluster(instanceName, instanceNamespace, instanceAnnotations),
 		},
@@ -40,7 +46,7 @@ func newClusterRole(instanceName, instanceNamespace, component string, instanceA
 
 func RequestClusterRole(request ClusterRoleRequest) (*rbacv1.ClusterRole, error) {
 	var errCount int
-	dlusterROle := newClusterRole(request.InstanceName, request.InstanceNamespace, request.Component, request.InstanceAnnotations, request.Rules)
+	dlusterROle := newClusterRole(request.Name, request.InstanceName, request.InstanceNamespace, request.Component, request.InstanceAnnotations, request.Rules)
 
 	if len(request.Mutations) > 0 {
 		for _, mutation := range request.Mutations {

@@ -12,6 +12,7 @@ import (
 )
 
 type RoleBindingRequest struct {
+	Name         string
 	InstanceName string
 	Namespace    string
 	Component    string
@@ -19,10 +20,14 @@ type RoleBindingRequest struct {
 }
 
 // newRoleBinding returns a new RoleBinding instance.
-func newRoleBinding(instanceName, namespace, component string) *rbacv1.RoleBinding {
+func newRoleBinding(name, instanceName, namespace, component string) *rbacv1.RoleBinding {
+	rbName := argoutil.GenerateResourceName(instanceName, component)
+	if name != "" {
+		rbName = name
+	}
 	return &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      argoutil.GenerateResourceName(instanceName, component),
+			Name:      rbName,
 			Namespace: namespace,
 			Labels:    argoutil.LabelsForCluster(instanceName, component),
 		},
@@ -30,7 +35,7 @@ func newRoleBinding(instanceName, namespace, component string) *rbacv1.RoleBindi
 }
 
 func RequestRoleBinding(request RoleBindingRequest) *rbacv1.RoleBinding {
-	return newRoleBinding(request.InstanceName, request.Namespace, request.Component)
+	return newRoleBinding(request.Name, request.InstanceName, request.Namespace, request.Component)
 }
 
 func CreateRoleBinding(rb *rbacv1.RoleBinding, client ctrlClient.Client) error {

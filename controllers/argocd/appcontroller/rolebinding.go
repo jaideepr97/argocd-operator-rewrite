@@ -5,6 +5,7 @@ import (
 
 	"github.com/jaideepr97/argocd-operator-rewrite/common"
 	"github.com/jaideepr97/argocd-operator-rewrite/pkg/argoutil"
+	"github.com/jaideepr97/argocd-operator-rewrite/pkg/cluster"
 	"github.com/jaideepr97/argocd-operator-rewrite/pkg/permissions"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -46,6 +47,17 @@ func (acr *AppControllerReconciler) reconcileManagedRoleBindings(rbr *permission
 	var reconciliationError error = nil
 
 	for namespace := range acr.ManagedNamespaces {
+		// Skip namespace if can't be retrieved or in terminating state
+		ns, err := cluster.GetNamespace(namespace, *acr.Client)
+		if err != nil {
+			acr.Logger.Error(err, "reconcileManagedRoleBindings: unable to retrieve namesapce", "name", namespace)
+			continue
+		}
+		if ns.DeletionTimestamp != nil {
+			acr.Logger.V(1).Info("reconcileManagedRoleBindings: skipping namespace in terminating state", "name", namespace)
+			continue
+		}
+
 		rbr.Namespace = namespace
 		desiredRB := permissions.RequestRoleBinding(*rbr)
 
@@ -134,10 +146,22 @@ func (acr *AppControllerReconciler) reconcileSourceRoleBindings(rbr *permissions
 	var reconciliationError error = nil
 
 	for namespace := range acr.SourceNamespaces {
+		// Skip namespace if can't be retrieved or in terminating state
+		ns, err := cluster.GetNamespace(namespace, *acr.Client)
+		if err != nil {
+			acr.Logger.Error(err, "reconcileSourceRoleBindings: unable to retrieve namesapce", "name", namespace)
+			continue
+		}
+		if ns.DeletionTimestamp != nil {
+			acr.Logger.V(1).Info("reconcileSourceRoleBindings: skipping namespace in terminating state", "name", namespace)
+			continue
+		}
+
 		rbr.Namespace = namespace
+		rbr.Name = getSourceNamespaceRBACName(acr.Instance.Name, acr.Instance.Namespace)
+
 		desiredRB := permissions.RequestRoleBinding(*rbr)
 
-		desiredRB.Name = getSourceNamespaceRBACName(acr.Instance.Name, acr.Instance.Namespace)
 		if namespace != acr.Instance.Namespace {
 			// add special label for app management to roleBinding
 			if len(desiredRB.Labels) == 0 {

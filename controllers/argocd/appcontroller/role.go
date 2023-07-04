@@ -5,6 +5,7 @@ import (
 
 	"github.com/jaideepr97/argocd-operator-rewrite/common"
 	"github.com/jaideepr97/argocd-operator-rewrite/pkg/argoutil"
+	"github.com/jaideepr97/argocd-operator-rewrite/pkg/cluster"
 	"github.com/jaideepr97/argocd-operator-rewrite/pkg/mutation"
 	"github.com/jaideepr97/argocd-operator-rewrite/pkg/permissions"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -41,6 +42,17 @@ func (acr *AppControllerReconciler) reconcileManagedRoles(rr *permissions.RoleRe
 	var reconciliationError error = nil
 
 	for namespace := range acr.ManagedNamespaces {
+		// Skip namespace if can't be retrieved or in terminating state
+		ns, err := cluster.GetNamespace(namespace, *acr.Client)
+		if err != nil {
+			acr.Logger.Error(err, "reconcileManagedRoles: unable to retrieve namesapce", "name", namespace)
+			continue
+		}
+		if ns.DeletionTimestamp != nil {
+			acr.Logger.V(1).Info("reconcileManagedRoles: skipping namespace in terminating state", "name", namespace)
+			continue
+		}
+
 		rules := policyRuleForManagedNamespace()
 		// control-plane rules for namespace scoped instance
 		if namespace == acr.Instance.Namespace {
@@ -51,8 +63,8 @@ func (acr *AppControllerReconciler) reconcileManagedRoles(rr *permissions.RoleRe
 
 		desiredRole, err := permissions.RequestRole(*rr)
 		if err != nil {
-			acr.Logger.Error(err, "reconcileRole: failed to request role", "name", desiredRole.Name, "namespace", desiredRole.Namespace)
-			acr.Logger.V(1).Info("reconcileRole: one or more mutations could not be applied")
+			acr.Logger.Error(err, "reconcileManagedRoles: failed to request role", "name", desiredRole.Name, "namespace", desiredRole.Namespace)
+			acr.Logger.V(1).Info("reconcileManagedRoles: one or more mutations could not be applied")
 			reconciliationError = err
 			continue
 		}
@@ -69,42 +81,42 @@ func (acr *AppControllerReconciler) reconcileManagedRoles(rr *permissions.RoleRe
 		existingRole, err := permissions.GetRole(desiredRole.Name, desiredRole.Namespace, *acr.Client)
 		if err != nil {
 			if !errors.IsNotFound(err) {
-				acr.Logger.Error(err, "reconcileRole: failed to retrieve role", "name", existingRole.Name, "namespace", existingRole.Namespace)
+				acr.Logger.Error(err, "reconcileManagedRoles: failed to retrieve role", "name", existingRole.Name, "namespace", existingRole.Namespace)
 				reconciliationError = err
 				continue
 			}
 
 			if customRoleName != "" {
 				// skip default role creation/reconciliation
-				acr.Logger.V(1).Info("reconcileRole: skip reconciliation in favor of custom role", "name", customRoleName)
+				acr.Logger.V(1).Info("reconcileManagedRoles: skip reconciliation in favor of custom role", "name", customRoleName)
 				continue
 			}
 
 			// setting owner reference only for control-plane role
 			if namespace == acr.Instance.Namespace {
 				if err = controllerutil.SetControllerReference(acr.Instance, desiredRole, acr.Scheme); err != nil {
-					acr.Logger.Error(err, "reconcileRole: failed to set owner reference for role", "name", desiredRole.Name, "namespace", desiredRole.Namespace)
+					acr.Logger.Error(err, "reconcileManagedRoles: failed to set owner reference for role", "name", desiredRole.Name, "namespace", desiredRole.Namespace)
 					reconciliationError = err
 				}
 			}
 
 			if err = permissions.CreateRole(desiredRole, *acr.Client); err != nil {
-				acr.Logger.Error(err, "reconcileRole: failed to create role", "name", desiredRole.Name, "namespace", desiredRole.Namespace)
+				acr.Logger.Error(err, "reconcileManagedRoles: failed to create role", "name", desiredRole.Name, "namespace", desiredRole.Namespace)
 				reconciliationError = err
 				continue
 			}
-			acr.Logger.V(0).Info("reconcileRole: role created", "name", desiredRole.Name, "namespace", desiredRole.Namespace)
+			acr.Logger.V(0).Info("reconcileManagedRoles: role created", "name", desiredRole.Name, "namespace", desiredRole.Namespace)
 			continue
 		}
 
 		if customRoleName != "" {
 			// Delete default role in namespace
 			if err := acr.DeleteRole(desiredRole.Name, desiredRole.Namespace); err != nil {
-				acr.Logger.Error(err, "reconcileRole: failed to delete role", "name", desiredRole.Name, "namespace", desiredRole.Namespace)
+				acr.Logger.Error(err, "reconcileManagedRoles: failed to delete role", "name", desiredRole.Name, "namespace", desiredRole.Namespace)
 				reconciliationError = err
 				continue
 			}
-			acr.Logger.V(0).Info("reconcileRole: role deleted", "name", desiredRole.Name, "namespace", desiredRole.Namespace)
+			acr.Logger.V(0).Info("reconcileManagedRoles: role deleted", "name", desiredRole.Name, "namespace", desiredRole.Namespace)
 			continue
 		}
 
@@ -119,11 +131,11 @@ func (acr *AppControllerReconciler) reconcileManagedRoles(rr *permissions.RoleRe
 
 		if roleChanged {
 			if err = permissions.UpdateRole(existingRole, *acr.Client); err != nil {
-				acr.Logger.Error(err, "reconcileRole: failed to update role", "name", existingRole.Name, "namespace", existingRole.Namespace)
+				acr.Logger.Error(err, "reconcileManagedRoles: failed to update role", "name", existingRole.Name, "namespace", existingRole.Namespace)
 				reconciliationError = err
 				continue
 			}
-			acr.Logger.V(0).Info("reconcileRole: role updated", "name", existingRole.Name, "namespace", existingRole.Namespace)
+			acr.Logger.V(0).Info("reconcileManagedRoles: role updated", "name", existingRole.Name, "namespace", existingRole.Namespace)
 			continue
 		}
 	}
@@ -134,19 +146,30 @@ func (acr *AppControllerReconciler) reconcileManagedRoles(rr *permissions.RoleRe
 func (acr *AppControllerReconciler) reconcileSourceRoles(rr *permissions.RoleRequest) error {
 	var reconciliationError error = nil
 
-	for ns, _ := range acr.SourceNamespaces {
+	for namespace, _ := range acr.SourceNamespaces {
+		// Skip namespace if can't be retrieved or in terminating state
+		ns, err := cluster.GetNamespace(namespace, *acr.Client)
+		if err != nil {
+			acr.Logger.Error(err, "reconcileSourceRoles: unable to retrieve namesapce", "name", namespace)
+			continue
+		}
+		if ns.DeletionTimestamp != nil {
+			acr.Logger.V(1).Info("reconcileSourceRoles: skipping namespace in terminating state", "name", namespace)
+			continue
+		}
+
 		rr.Rules = policyRuleForSourceNamespace()
-		rr.Namespace = ns
+		rr.Namespace = namespace
+		rr.Name = getSourceNamespaceRBACName(acr.Instance.Name, acr.Instance.Namespace)
 
 		desiredRole, err := permissions.RequestRole(*rr)
 		if err != nil {
-			acr.Logger.Error(err, "reconcileRole: failed to request role", "name", desiredRole.Name, "namespace", desiredRole.Namespace)
-			acr.Logger.V(1).Info("reconcileRole: one or more mutations could not be applied")
+			acr.Logger.Error(err, "reconcileSourceRoles: failed to request role", "name", desiredRole.Name, "namespace", desiredRole.Namespace)
+			acr.Logger.V(1).Info("reconcileSourceRoles: one or more mutations could not be applied")
 			reconciliationError = err
 			continue
 		}
 
-		desiredRole.Name = getSourceNamespaceRBACName(acr.Instance.Name, acr.Instance.Namespace)
 		// add special label for source namespace role
 		if len(desiredRole.Labels) == 0 {
 			desiredRole.Labels = make(map[string]string)
@@ -156,17 +179,17 @@ func (acr *AppControllerReconciler) reconcileSourceRoles(rr *permissions.RoleReq
 		existingRole, err := permissions.GetRole(desiredRole.Name, desiredRole.Namespace, *acr.Client)
 		if err != nil {
 			if !errors.IsNotFound(err) {
-				acr.Logger.Error(err, "reconcileRole: failed to retrieve role", "name", existingRole.Name, "namespace", existingRole.Namespace)
+				acr.Logger.Error(err, "reconcileSourceRoles: failed to retrieve role", "name", existingRole.Name, "namespace", existingRole.Namespace)
 				reconciliationError = err
 				continue
 			}
 
 			if err = permissions.CreateRole(desiredRole, *acr.Client); err != nil {
-				acr.Logger.Error(err, "reconcileRole: failed to create role", "name", existingRole.Name, "namespace", existingRole.Namespace)
+				acr.Logger.Error(err, "reconcileSourceRoles: failed to create role", "name", existingRole.Name, "namespace", existingRole.Namespace)
 				reconciliationError = err
 				continue
 			}
-			acr.Logger.V(0).Info("reconcileRole: role created", "name", desiredRole.Name, "namespace", desiredRole.Namespace)
+			acr.Logger.V(0).Info("reconcileSourceRoles: role created", "name", desiredRole.Name, "namespace", desiredRole.Namespace)
 			continue
 		}
 
@@ -181,11 +204,11 @@ func (acr *AppControllerReconciler) reconcileSourceRoles(rr *permissions.RoleReq
 
 		if roleChanged {
 			if err = permissions.UpdateRole(existingRole, *acr.Client); err != nil {
-				acr.Logger.Error(err, "reconcileRole: failed to update role", "name", existingRole.Name, "namespace", existingRole.Namespace)
+				acr.Logger.Error(err, "reconcileSourceRoles: failed to update role", "name", existingRole.Name, "namespace", existingRole.Namespace)
 				reconciliationError = err
 				continue
 			}
-			acr.Logger.V(0).Info("reconcileRole: role updated", "name", existingRole.Name, "namespace", existingRole.Namespace)
+			acr.Logger.V(0).Info("reconcileSourceRoles: role updated", "name", existingRole.Name, "namespace", existingRole.Namespace)
 			continue
 		}
 	}

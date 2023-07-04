@@ -144,6 +144,11 @@ func (r *ArgoCDReconciler) reconcileControllers() error {
 		return err
 	}
 
+	if err := r.SecretController.Reconcile(); err != nil {
+		r.Logger.Error(err, "failed to reconcile secret controller")
+		return err
+	}
+
 	// non-core components, don't return reconciliation errors
 	if err := r.AppsetController.Reconcile(); err != nil {
 		r.Logger.Error(err, "failed to reconcile applicationset controller")
@@ -310,10 +315,11 @@ func (r *ArgoCDReconciler) removeDeletionFinalizer(argocd *v1alpha1.ArgoCD) erro
 
 func (r *ArgoCDReconciler) InitializeControllerReconcilers() {
 	r.SecretController = &secret.SecretReconciler{
-		Client:        &r.Client,
-		Scheme:        r.Scheme,
-		Instance:      r.Instance,
-		ClusterScoped: r.ClusterScoped,
+		Client:            &r.Client,
+		Scheme:            r.Scheme,
+		Instance:          r.Instance,
+		ClusterScoped:     r.ClusterScoped,
+		ManagedNamespaces: r.ManagedNamespaces,
 	}
 
 	r.ConfigMapController = &configmap.ConfigMapReconciler{

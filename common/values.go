@@ -67,4 +67,7 @@ const (
 
 	// ArgoCDRBACTypeAppManagement is the value used when an rbac resource is targeted for resource management
 	ArgoCDRBACTypeResourceMananagement = "resource-management"
+
+	// ArgoCDSecretTypeCluster is the value used for cluster secret labels
+	ArgoCDSecretTypeCluster = "cluster"
 )
