@@ -20,7 +20,6 @@ func (acr *AppControllerReconciler) reconcileRoleBindings() error {
 	roleBindingRequest := permissions.RoleBindingRequest{
 		InstanceName: acr.Instance.Name,
 		Component:    ArgoCDApplicationControllerComponent,
-		Client:       acr.Client,
 	}
 
 	saName := argoutil.GenerateResourceName(acr.Instance.Name, ArgoCDApplicationControllerComponent)

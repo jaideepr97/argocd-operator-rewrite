@@ -20,7 +20,6 @@ func (sr *ServerReconciler) reconcileRoleBindings() error {
 	roleBindingRequest := permissions.RoleBindingRequest{
 		InstanceName: sr.Instance.Name,
 		Component:    ArgoCDServerComponent,
-		Client:       sr.Client,
 	}
 
 	saName := argoutil.GenerateResourceName(sr.Instance.Name, ArgoCDServerComponent)

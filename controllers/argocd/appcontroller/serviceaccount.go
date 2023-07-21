@@ -9,11 +9,10 @@ import (
 func (acr *AppControllerReconciler) reconcileServiceAccount() error {
 	acr.Logger.V(0).Info("reconciling serviceaccount")
 
-	saRequest := permissions.ServiceaccountRequest{
+	saRequest := permissions.ServiceAccountRequest{
 		InstanceName: acr.Instance.Name,
 		Namespace:    acr.Instance.Namespace,
 		Component:    ArgoCDApplicationControllerComponent,
-		Client:       acr.Client,
 	}
 
 	desiredSA := permissions.RequestServiceaccount(saRequest)

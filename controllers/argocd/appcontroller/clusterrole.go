@@ -14,13 +14,13 @@ func (acr *AppControllerReconciler) reconcileClusterRole() error {
 	acr.Logger.V(0).Info("reconciling clusterRole")
 
 	clusterRoleRequest := permissions.ClusterRoleRequest{
-		InstanceName:        acr.Instance.Name,
-		InstanceNamespace:   acr.Instance.Namespace,
-		InstanceAnnotations: acr.Instance.Annotations,
-		Component:           ArgoCDApplicationControllerComponent,
-		Rules:               policyRuleForClusterScope(),
-		Mutations:           []mutation.MutateFunc{mutation.ApplyReconcilerMutation},
-		Client:              *acr.Client,
+		InstanceName:      acr.Instance.Name,
+		InstanceNamespace: acr.Instance.Namespace,
+		Annotations:       acr.Instance.Annotations,
+		Component:         ArgoCDApplicationControllerComponent,
+		Rules:             policyRuleForClusterScope(),
+		Mutations:         []mutation.MutateFunc{mutation.ApplyReconcilerMutation},
+		Client:            *acr.Client,
 	}
 
 	desiredClusterRole, err := permissions.RequestClusterRole(clusterRoleRequest)

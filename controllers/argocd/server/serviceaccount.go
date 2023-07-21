@@ -9,11 +9,10 @@ import (
 func (sr *ServerReconciler) reconcileServiceAccount() error {
 	sr.Logger.V(0).Info("reconciling serviceaccount")
 
-	saRequest := permissions.ServiceaccountRequest{
+	saRequest := permissions.ServiceAccountRequest{
 		InstanceName: sr.Instance.Name,
 		Namespace:    sr.Instance.Namespace,
 		Component:    ArgoCDServerComponent,
-		Client:       sr.Client,
 	}
 
 	desiredSA := permissions.RequestServiceaccount(saRequest)
