@@ -1,0 +1,24 @@
+{
+   "name": "",
+   "tests": 1,
+   "failures": 0,
+   "time": "1.520",
+   "testsuite": [
+     {
+       "tests": 1,
+       "failures": 0,
+       "timestamp": "2023-07-05T07:59:25.783378318-04:00",
+       "time": "0.434",
+       "name": "./test/k8s",
+       "testcase": [
+         {
+           "classname": "k8s",
+           "name": "1-001-validate-manage-resources-non-control-plane-namespaces",
+           "timestamp": "2023-07-05T07:59:25.784438374-04:00",
+           "time": "0.433",
+           "assertions": 5
+         }
+       ]
+     }
+   ]
+ }

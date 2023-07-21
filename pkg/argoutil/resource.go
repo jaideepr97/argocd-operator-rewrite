@@ -24,12 +24,8 @@ func LabelsForCluster(instanceName, component string) map[string]string {
 }
 
 // annotationsForCluster returns the annotations for all cluster resources.
-func AnnotationsForCluster(instanceName, instanceNamespace string, instanceAnnotations map[string]string) map[string]string {
-	annotations := common.DefaultAnnotations(instanceName, instanceNamespace)
-	for key, val := range instanceAnnotations {
-		annotations[key] = val
-	}
-	return annotations
+func AnnotationsForCluster(instanceName, instanceNamespace string) map[string]string {
+	return common.DefaultAnnotations(instanceName, instanceNamespace)
 }
 
 // nameWithSuffix will return a name with the given suffix appended to it

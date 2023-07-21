@@ -14,13 +14,13 @@ func (sr *ServerReconciler) reconcileClusterRole() error {
 	sr.Logger.V(0).Info("reconciling clusterRole")
 
 	clusterRoleRequest := permissions.ClusterRoleRequest{
-		InstanceName:        sr.Instance.Name,
-		InstanceNamespace:   sr.Instance.Namespace,
-		InstanceAnnotations: sr.Instance.Annotations,
-		Component:           ArgoCDServerComponent,
-		Rules:               policyRuleForClusterScope(),
-		Mutations:           []mutation.MutateFunc{mutation.ApplyReconcilerMutation},
-		Client:              *sr.Client,
+		InstanceName:      sr.Instance.Name,
+		InstanceNamespace: sr.Instance.Namespace,
+		Annotations:       sr.Instance.Annotations,
+		Component:         ArgoCDServerComponent,
+		Rules:             policyRuleForClusterScope(),
+		Mutations:         []mutation.MutateFunc{mutation.ApplyReconcilerMutation},
+		Client:            *sr.Client,
 	}
 
 	desiredClusterRole, err := permissions.RequestClusterRole(clusterRoleRequest)

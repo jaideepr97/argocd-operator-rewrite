@@ -17,6 +17,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 	ctrlClient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -250,9 +252,18 @@ func isOwnerOfInterest(owner metav1.OwnerReference) bool {
 // Any other roles and rolebindings that need to be created will be handled by the reconciler
 func (r *ArgoCDReconciler) deleteRBACFromPreviouslyManagedNamespace(namespace string, ResourceDeletionLabelValues []string) error {
 
+	componentReq, _ := labels.NewRequirement(common.ArgoCDKeyComponent, selection.In, []string{
+		appcontroller.ArgoCDApplicationControllerComponent, server.ArgoCDServerComponent,
+	})
+	selector := labels.NewSelector().Add(*componentReq)
+
 	listOptions := getResourceSelectionOptions(ResourceDeletionLabelValues)
+	// listOptions = append(listOptions, &ctrlClient.ListOptions{
+	// 	Namespace: namespace,
+	// })
 	listOptions = append(listOptions, &ctrlClient.ListOptions{
-		Namespace: namespace,
+		Namespace:     namespace,
+		LabelSelector: selector,
 	})
 
 	// List all the roles created for ArgoCD using listOptions, and request to have them deleted

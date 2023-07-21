@@ -9,18 +9,17 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlClient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type ClusterRoleRequest struct {
-	Name                string
-	InstanceName        string
-	InstanceNamespace   string
-	InstanceAnnotations map[string]string
-	Component           string
-	Rules               []rbacv1.PolicyRule
+	Name              string
+	InstanceName      string
+	InstanceNamespace string
+	Labels            map[string]string
+	Annotations       map[string]string
+	Component         string
+	Rules             []rbacv1.PolicyRule
 
 	// array of functions to mutate role before returning to requester
 	Mutations []mutation.MutateFunc
@@ -28,7 +27,7 @@ type ClusterRoleRequest struct {
 }
 
 // newClusterRole returns a new clusterRole instance.
-func newClusterRole(name, instanceName, instanceNamespace, component string, instanceAnnotations map[string]string, rules []rbacv1.PolicyRule) *rbacv1.ClusterRole {
+func newClusterRole(name, instanceName, instanceNamespace, component string, labels, annotations map[string]string, rules []rbacv1.PolicyRule) *rbacv1.ClusterRole {
 	crName := argoutil.GenerateUniqueResourceName(instanceName, instanceNamespace, component)
 	if name != "" {
 		crName = name
@@ -37,91 +36,79 @@ func newClusterRole(name, instanceName, instanceNamespace, component string, ins
 	return &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        crName,
-			Labels:      argoutil.LabelsForCluster(instanceName, component),
-			Annotations: argoutil.AnnotationsForCluster(instanceName, instanceNamespace, instanceAnnotations),
+			Labels:      argoutil.MergeMaps(argoutil.LabelsForCluster(instanceName, component), labels),
+			Annotations: argoutil.MergeMaps(argoutil.AnnotationsForCluster(instanceName, instanceNamespace), annotations),
 		},
 		Rules: rules,
 	}
 }
 
 func RequestClusterRole(request ClusterRoleRequest) (*rbacv1.ClusterRole, error) {
-	var errCount int
-	dlusterROle := newClusterRole(request.Name, request.InstanceName, request.InstanceNamespace, request.Component, request.InstanceAnnotations, request.Rules)
+	var (
+		mutationErr error
+	)
+	clusterRole := newClusterRole(request.Name, request.InstanceName, request.InstanceNamespace, request.Component, request.Labels, request.Annotations, request.Rules)
 
 	if len(request.Mutations) > 0 {
 		for _, mutation := range request.Mutations {
-			err := mutation(nil, *dlusterROle, &request.Client)
+			err := mutation(nil, clusterRole, request.Client)
 			if err != nil {
-				// TO DO: log error while invoking mutation
-				errCount++
+				mutationErr = err
 			}
 		}
-		if errCount > 0 {
-			return dlusterROle, fmt.Errorf("RequestRole: one or more mutation functions could not be applied")
+		if mutationErr != nil {
+			return clusterRole, fmt.Errorf("RequestClusterRole: one or more mutation functions could not be applied: %s", mutationErr)
 		}
 	}
-	return dlusterROle, nil
+	return clusterRole, nil
 }
 
-func CreateClusterRole(clusterRole *rbacv1.ClusterRole, client client.Client) error {
-	// TO DO: log creation of clusterRole here (info)
-	if err := client.Create(context.TODO(), clusterRole); err != nil {
-		// TO DO: log error here (error)
-		return fmt.Errorf("CreateClusterRole: failed to create clusterRole %s: %w", clusterRole.Name, err)
-	}
-	return nil
+func CreateClusterRole(role *rbacv1.ClusterRole, client ctrlClient.Client) error {
+	return client.Create(context.TODO(), role)
 }
 
 func GetClusterRole(name string, client ctrlClient.Client) (*rbacv1.ClusterRole, error) {
-	existingClusterRole := &rbacv1.ClusterRole{}
-	err := client.Get(context.TODO(), types.NamespacedName{Name: name}, existingClusterRole)
+	existingRole := &rbacv1.ClusterRole{}
+	err := client.Get(context.TODO(), ctrlClient.ObjectKey{Name: name}, existingRole)
 	if err != nil {
-		if errors.IsNotFound(err) {
-			// TO DO: log clusterRole not found (debug)
-			return nil, fmt.Errorf("GetRole: unable to find clusterRole %s: %w", name, err)
-		}
+		return nil, err
 	}
-	return existingClusterRole, nil
+	return existingRole, nil
 }
 
 func ListClusterRoles(client ctrlClient.Client, listOptions []ctrlClient.ListOption) (*rbacv1.ClusterRoleList, error) {
-	existingClusterRoles := &rbacv1.ClusterRoleList{}
-	err := client.List(context.TODO(), existingClusterRoles, listOptions...)
+	existingRoles := &rbacv1.ClusterRoleList{}
+	err := client.List(context.TODO(), existingRoles, listOptions...)
 	if err != nil {
-		return nil, fmt.Errorf("ListClusterRoles: unable to list clusterRoles: %w", err)
+		return nil, err
 	}
-
-	return existingClusterRoles, nil
+	return existingRoles, nil
 }
 
-func UpdateClusterRole(clusterRole *rbacv1.ClusterRole, client ctrlClient.Client) error {
-	_, err := GetClusterRole(clusterRole.Name, client)
+func UpdateClusterRole(role *rbacv1.ClusterRole, client ctrlClient.Client) error {
+	_, err := GetClusterRole(role.Name, client)
 	if err != nil {
-		// TO DO: log role not found (error)
-		return fmt.Errorf("UpdateRole: unable to find role %s: %w", clusterRole.Name, err)
+		return err
 	}
 
-	if err = client.Update(context.TODO(), clusterRole); err != nil {
-		return fmt.Errorf("UpdateRole: unable to update role %s: %w", clusterRole.Name, err)
+	if err = client.Update(context.TODO(), role); err != nil {
+		return err
 	}
 
 	return nil
 }
 
 func DeleteClusterRole(name string, client ctrlClient.Client) error {
-	existingClusterRole, err := GetClusterRole(name, client)
+	existingRole, err := GetClusterRole(name, client)
 	if err != nil {
 		if !errors.IsNotFound(err) {
-			return fmt.Errorf("DeleteClusterRole: unable to retrieve clusterRole %s: %w", name, err)
+			return err
 		}
-		// TO DO: log role was not found
 		return nil
 	}
 
-	// TO DO: log deletion of role here (info)
-	if err := client.Delete(context.TODO(), existingClusterRole); err != nil {
-		// TO DO: log error here (warn)
-		return fmt.Errorf("DeleteClusterRole: failed to delete clusterRole %s: %w", existingClusterRole.Name, err)
+	if err := client.Delete(context.TODO(), existingRole); err != nil {
+		return err
 	}
 	return nil
 }

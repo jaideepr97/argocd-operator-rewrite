@@ -1,0 +1,47 @@
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+timeout: 720
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: argocd-server
+  namespace: manager
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: argocd-application-controller
+  namespace: manager
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: argocd-server
+  namespace: manager
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: argocd-server
+subjects:
+- kind: ServiceAccount
+  name: argocd-server
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: argocd-application-controller
+  namespace: manager
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: argocd-application-controller
+subjects:
+- kind: ServiceAccount
+  name: argocd-application-controller
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: argocd-default-cluster-config
+  namespace: manager
